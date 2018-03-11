@@ -146,4 +146,4 @@ After that everything goes back to normal and performance doesn't seem to be aff
 * [keyboard-swipe-cursor](https://github.com/jakibaki/sailfishos-prepatch-keyboard-swipe) by me (jakibaki).  
   It's a simple patch which allows you to move the cursor on the keyboard by swiping it to the left/right.
   
-If you want your patch listed here please open an issue or write to me on Telegram (@jakibaki).
+If you want your patch listed here please open an issue or ask in [the tmo thread](http://talk.maemo.org/showthread.php?p=1542247#post1542247)
