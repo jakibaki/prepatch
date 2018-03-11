@@ -22,7 +22,7 @@
 
 ## How does it work?
 
-Prepatch works by preloading a library into every binary (don't worry, the overheat is much smaller then it sounds) and replaces the open+open64 function in there.
+Prepatch works by preloading a library into every binary (don't worry, the overhead is much smaller then it sounds) and replaces the open+open64 function in there.
 
 If an application tries to open a file which doesn't have a patch (or tries to open the file for writing/as any user other then nemo) the replaced open function will just behave like the normal open function.
 
