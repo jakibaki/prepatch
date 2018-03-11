@@ -121,7 +121,7 @@ Im my case:
 diff -u KeyboardBase-Original.qml KeyboardBase-Modified.qml > 050-prepatch-keyboard-swipe/usr/share/maliit/plugins/com/jolla/KeyboardBase.qml.patch
 ```
 
-Repeat this progess with all the files you want to patch (you can place multiple patches in the same 050-prepatch-folder).
+Repeat this process with all the files you want to patch (you can place multiple patches in the same 050-prepatch-folder).
 
 If you want to add/completely replace a file instead of patching it you can simply place it inside the folder without the `.patch` extension. Please note that new files will not appear in directory-listings so `ls /path/to/fakefile` will not show the file but running `cat /path/to/fakefile/file` will print out its contents.
 
