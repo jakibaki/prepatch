@@ -36,13 +36,25 @@ char* findReplacement(char* origPath) {
 	char* globQuery = malloc(bufLen);
 	sprintf(globQuery, "%s*%s", patch_base_path, origPath);
 	glob_t globlist;
-	if (glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOSPACE || glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOMATCH)
+	if (glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOSPACE || glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOMATCH) {
+		free(globQuery);
+		globfree(&globlist);	
 		return origPath;
-	if (glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_ABORTED)
+	}
+	if (glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_ABORTED) {
+		free(globQuery);
+		globfree(&globlist);	
 		return origPath;
+	}
 	if(globlist.gl_pathv[0]) {
-		return globlist.gl_pathv[0];
+		free(globQuery);
+		char* repStr = malloc(strlen(globlist.gl_pathv[0])+1);
+		memcpy(repStr, globlist.gl_pathv[0], strlen(globlist.gl_pathv[0])+1);
+		globfree(&globlist);
+		return repStr;
 	} else {
+		free(globQuery);
+		globfree(&globlist);	
 		return origPath;
 	}
 }
@@ -50,7 +62,7 @@ char* findReplacement(char* origPath) {
 
 int handle_open(orig_open_f_type orig_open, const char *relpath, int flags)
 {
-	if ( (flags & O_APPEND) || (flags & O_WRONLY) || getuid() != 100000 || (strncmp("/dev", relpath, strlen("/dev")) == 0) || (strncmp("/run", relpath, strlen("/run")) == 0)) {
+	if ( (flags & O_APPEND) || (flags & O_WRONLY) || getuid() != 100000  || (strncmp("/sys", relpath, strlen("/sys")) == 0) || (strncmp("/dev", relpath, strlen("/dev")) == 0) || (strncmp("/run", relpath, strlen("/run")) == 0)) {
 		// Don't run if trying to write or not nemo
 		return (orig_open(relpath, flags));
 	}
@@ -61,10 +73,12 @@ int handle_open(orig_open_f_type orig_open, const char *relpath, int flags)
 
 	// Replace (or add) the file if needed
 	char* newPath = findReplacement(pathname);
+	int new = 0;
 	if(strcmp(newPath,pathname)) {
+		new = 1;
 		pathname = newPath;
 		relpath = newPath;
-	}
+	} 
 	
 
 
@@ -75,11 +89,12 @@ int handle_open(orig_open_f_type orig_open, const char *relpath, int flags)
 	char *globQuery = malloc(bufLen);
 	sprintf(globQuery, "%s*%s.patch", patch_base_path, pathname);
 	glob_t globlist;
-	if (glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOSPACE || glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOMATCH)
-		return orig_open(relpath, flags);
-	if (glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_ABORTED)
-		return orig_open(relpath, flags);
-	
+	if ((glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOSPACE || glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOMATCH) || (glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_ABORTED)) {
+		fd = orig_open(relpath, flags);
+		if(new)
+			free(newPath);
+		return fd;
+	}
 	if(globlist.gl_pathv[0]) {
 		char *outPath = tmpnam(NULL);
 		int fdOr = orig_open(relpath, flags);
@@ -103,7 +118,8 @@ int handle_open(orig_open_f_type orig_open, const char *relpath, int flags)
 	}
 	free (globQuery);
 	globfree(&globlist);
-	
+	if(new)
+		free(newPath);	
 	return fd; 
 
 }
