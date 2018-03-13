@@ -20,8 +20,6 @@
 
 char *patch_base_path = "/usr/share/prepatch/";
 
-typedef int (*orig_open_f_type)(const char *pathname, int flags, ...);
-
 void patchFile(const char *filePath, const char *patchPath)
 {
 	if (!fork())
@@ -60,11 +58,11 @@ char* findReplacement(char* origPath) {
 }
 
 
-int handle_open(orig_open_f_type orig_open, const char *relpath, int flags)
+int handle_open(const char *relpath, int flags)
 {
 	if ( (flags & O_APPEND) || (flags & O_WRONLY) || getuid() != 100000  || (strncmp("/sys", relpath, strlen("/sys")) == 0) || (strncmp("/dev", relpath, strlen("/dev")) == 0) || (strncmp("/run", relpath, strlen("/run")) == 0)) {
 		// Don't run if trying to write or not nemo
-		return (orig_open(relpath, flags));
+		return (syscall(5, relpath, flags));
 	}
 
 	
@@ -90,17 +88,17 @@ int handle_open(orig_open_f_type orig_open, const char *relpath, int flags)
 	sprintf(globQuery, "%s*%s.patch", patch_base_path, pathname);
 	glob_t globlist;
 	if ((glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOSPACE || glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOMATCH) || (glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_ABORTED)) {
-		fd = orig_open(relpath, flags);
+		fd = syscall(5, relpath, flags);
 		if(new)
 			free(newPath);
 		return fd;
 	}
 	if(globlist.gl_pathv[0]) {
 		char *outPath = tmpnam(NULL);
-		int fdOr = orig_open(relpath, flags);
+		int fdOr = syscall(5, relpath, flags);
 		struct stat stat_buf; 
 		fstat(fdOr, &stat_buf);
-		int fdOut = orig_open(outPath, O_CREAT | O_WRONLY, 0777);
+		int fdOut = syscall(5, outPath, O_CREAT | O_WRONLY, 0777);
 		sendfile(fdOut, fdOr, NULL, stat_buf.st_size);
 		close(fdOr);
 		close(fdOut);
@@ -111,10 +109,10 @@ int handle_open(orig_open_f_type orig_open, const char *relpath, int flags)
 			patchFile(outPath, globlist.gl_pathv[i]);			
 		}
 
-		fd = orig_open(outPath, flags);		
+		fd = syscall(5, outPath, flags);		
 		unlink(outPath);
 	} else {
-		fd = orig_open(relpath, flags);
+		fd = syscall(5, relpath, flags);
 	}
 	free (globQuery);
 	globfree(&globlist);
@@ -128,26 +126,20 @@ int handle_open(orig_open_f_type orig_open, const char *relpath, int flags)
 int open64(const char *pathname, int flags, ...)
 {
 
-    orig_open_f_type orig_func;
-    orig_func = (orig_open_f_type)dlsym(RTLD_NEXT, "open64");
-
     if (flags & O_CREAT) {
         va_list args;
         va_start(args, flags);
         int mode = va_arg(args, int);
         va_end(args);
-        return orig_func(pathname, flags, mode);
+        return syscall(5, pathname, flags, mode);
     } else {
-        return handle_open(orig_func, pathname, flags);
+        return handle_open(pathname, flags);
     }
 }
 
 
 int open(const char *pathname, int flags, ...)
 {
-
-    orig_open_f_type orig_func;
-    orig_func = (orig_open_f_type)dlsym(RTLD_NEXT, "open");
 
     // If O_CREAT is used to create a file, the file access mode must be given.
     if (flags & O_CREAT) {
@@ -155,29 +147,12 @@ int open(const char *pathname, int flags, ...)
         va_start(args, flags);
         int mode = va_arg(args, int);
         va_end(args);
-        return orig_func(pathname, flags, mode);
+        return syscall(5, pathname, flags, mode);
     } else {
-        return handle_open(orig_func, pathname, flags);
+        return handle_open(pathname, flags);
     }
 }
 
-
-/*
-int open(const char *pathname, int flags, ...)
-{
-	orig_open_f_type orig_open;
-	orig_open = (orig_open_f_type)dlsym(RTLD_NEXT, "open");
-	if ((flags & O_CREAT) || (flags & O_TMPFILE))
-	{
-		va_list arg;
-		va_start(arg, flags);
-		mode_t mode = va_arg(arg, int);
-		va_end(arg);
-		return (orig_open(pathname, flags, mode));
-	}
-	return handle_open(orig_open, pathname, flags);
-}
-*/
 
 /*
 int __libc_start_main(int (*main) (int, char **, char **),
