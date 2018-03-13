@@ -1,7 +1,7 @@
 Name:       prepatch
 
 Summary:    A patchmanager alternative for Sailfish OS which doesn't modify any files on disk.
-Version:    0.1.1
+Version:    0.2.0
 Release:    1
 Group:      Qt/Qt
 License:    Other
