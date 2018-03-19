@@ -19,8 +19,7 @@
 #include <sys/sendfile.h>
 
 char *patch_base_path = "/usr/share/prepatch/";
-char curPath [PATH_MAX];
-
+char curPath[PATH_MAX];
 
 char *tmpDir = "/tmp";
 char *tmpPrefix = "prepatch";
@@ -34,42 +33,47 @@ void patchFile(const char *filePath, const char *patchPath)
 	wait(NULL);
 }
 
-int findReplacement() {
+int findReplacement()
+{
 	int bufLen = strlen(patch_base_path) + 1 + strlen(curPath) + 1;
-	char* globQuery = malloc(bufLen);
+	char *globQuery = malloc(bufLen);
 	sprintf(globQuery, "%s*%s", patch_base_path, curPath);
 	glob_t globlist;
-	if (glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOSPACE || glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOMATCH) {
+	if (glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOSPACE || glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOMATCH)
+	{
 		free(globQuery);
 		globfree(&globlist);
-		return 0;	
-	}
-	if (glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_ABORTED) {
-		free(globQuery);
-		globfree(&globlist);	
 		return 0;
 	}
-	if(globlist.gl_pathv[0]) {
+	if (glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_ABORTED)
+	{
 		free(globQuery);
-		memcpy(curPath, globlist.gl_pathv[0], strlen(globlist.gl_pathv[0])+1);
+		globfree(&globlist);
+		return 0;
+	}
+	if (globlist.gl_pathv[0])
+	{
+		free(globQuery);
+		memcpy(curPath, globlist.gl_pathv[0], strlen(globlist.gl_pathv[0]) + 1);
 		globfree(&globlist);
 		return 1;
-	} else {
+	}
+	else
+	{
 		free(globQuery);
-		globfree(&globlist);	
+		globfree(&globlist);
 		return 0;
 	}
 }
 
-
 int handle_open(const char *relpath, int flags)
 {
-	if ( (flags & O_APPEND) || (flags & O_WRONLY) || getuid() != 100000  || (strncmp("/sys", relpath, strlen("/sys")) == 0) || (strncmp("/dev", relpath, strlen("/dev")) == 0) || (strncmp("/run", relpath, strlen("/run")) == 0)) {
+	if ((flags & O_APPEND) || (flags & O_WRONLY) || getuid() != 100000 || (strncmp("/sys", relpath, strlen("/sys")) == 0) || (strncmp("/dev", relpath, strlen("/dev")) == 0) || (strncmp("/run", relpath, strlen("/run")) == 0))
+	{
 		// Don't run if trying to write or not nemo
 		return (syscall(5, relpath, flags));
 	}
 
-		
 	realpath(relpath, curPath);
 
 	// Apply patches (if needed)
@@ -83,17 +87,19 @@ int handle_open(const char *relpath, int flags)
 	int new = findReplacement();
 
 	glob_t globlist;
-	if ((glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOSPACE || glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOMATCH) || (glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_ABORTED)) {
-		if(new)
+	if ((glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOSPACE || glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOMATCH) || (glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_ABORTED))
+	{
+		if (new)
 			fd = syscall(5, curPath, flags);
 		else
 			fd = syscall(5, relpath, flags);
 		return fd;
 	}
-	if(globlist.gl_pathv[0]) {
+	if (globlist.gl_pathv[0])
+	{
 		char *outPath = tempnam(tmpDir, tmpPrefix);
 		int fdOr = syscall(5, curPath, flags);
-		struct stat stat_buf; 
+		struct stat stat_buf;
 		fstat(fdOr, &stat_buf);
 		int fdOut = syscall(5, outPath, O_CREAT | O_WRONLY, 0777);
 		sendfile(fdOut, fdOr, NULL, stat_buf.st_size);
@@ -101,55 +107,61 @@ int handle_open(const char *relpath, int flags)
 		close(fdOut);
 
 		int i;
-		for(i = 0; globlist.gl_pathv[i]; i++)
+		for (i = 0; globlist.gl_pathv[i]; i++)
 		{
-			patchFile(outPath, globlist.gl_pathv[i]);			
+			patchFile(outPath, globlist.gl_pathv[i]);
 		}
 
-		fd = syscall(5, outPath, flags);		
+		fd = syscall(5, outPath, flags);
 		unlink(outPath);
 		free(outPath);
-
-	} else {
-		fd = syscall(5, curPath, flags);
 	}
-	free (globQuery);
+	else
+	{
+		if (new)
+			fd = syscall(5, curPath, flags);
+		else
+			fd = syscall(5, relpath, flags);
+	}
+	free(globQuery);
 	globfree(&globlist);
-	return fd; 
-
+	return fd;
 }
-
 
 int open64(const char *pathname, int flags, ...)
 {
 
-    if (flags & O_CREAT) {
-        va_list args;
-        va_start(args, flags);
-        int mode = va_arg(args, int);
-        va_end(args);
-        return syscall(5, pathname, flags, mode);
-    } else {
-        return handle_open(pathname, flags);
-    }
+	if (flags & O_CREAT)
+	{
+		va_list args;
+		va_start(args, flags);
+		int mode = va_arg(args, int);
+		va_end(args);
+		return syscall(5, pathname, flags, mode);
+	}
+	else
+	{
+		return handle_open(pathname, flags);
+	}
 }
-
 
 int open(const char *pathname, int flags, ...)
 {
 
-    // If O_CREAT is used to create a file, the file access mode must be given.
-    if (flags & O_CREAT) {
-        va_list args;
-        va_start(args, flags);
-        int mode = va_arg(args, int);
-        va_end(args);
-        return syscall(5, pathname, flags, mode);
-    } else {
-        return handle_open(pathname, flags);
-    }
+	// If O_CREAT is used to create a file, the file access mode must be given.
+	if (flags & O_CREAT)
+	{
+		va_list args;
+		va_start(args, flags);
+		int mode = va_arg(args, int);
+		va_end(args);
+		return syscall(5, pathname, flags, mode);
+	}
+	else
+	{
+		return handle_open(pathname, flags);
+	}
 }
-
 
 /*
 int __libc_start_main(int (*main) (int, char **, char **),
