@@ -93,6 +93,8 @@ int handle_open(const char *relpath, int flags)
 			fd = syscall(5, curPath, flags);
 		else
 			fd = syscall(5, relpath, flags);
+		free(globQuery);
+		globfree(&globlist);
 		return fd;
 	}
 	if (globlist.gl_pathv[0])
