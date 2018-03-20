@@ -19,7 +19,6 @@
 #include <sys/sendfile.h>
 
 char *patch_base_path = "/usr/share/prepatch/";
-char curPath[PATH_MAX];
 
 char *tmpDir = "/tmp";
 char *tmpPrefix = "prepatch";
@@ -33,7 +32,7 @@ void patchFile(const char *filePath, const char *patchPath)
 	wait(NULL);
 }
 
-int findReplacement()
+int findReplacement(char* curPath)
 {
 	int bufLen = strlen(patch_base_path) + 1 + strlen(curPath) + 1;
 	char *globQuery = malloc(bufLen);
@@ -74,6 +73,7 @@ int handle_open(const char *relpath, int flags)
 		return (syscall(5, relpath, flags));
 	}
 
+	char* curPath = malloc(PATH_MAX);
 	realpath(relpath, curPath);
 
 	// Apply patches (if needed)
@@ -84,7 +84,7 @@ int handle_open(const char *relpath, int flags)
 
 	// Replace (or add) the file if needed
 	// We're doing this after building the glob query so the path stays the same.
-	int new = findReplacement();
+	int new = findReplacement(curPath);
 
 	glob_t globlist;
 	if ((glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOSPACE || glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_NOMATCH) || (glob(globQuery, GLOB_PERIOD, NULL, &globlist) == GLOB_ABORTED))
@@ -95,6 +95,7 @@ int handle_open(const char *relpath, int flags)
 			fd = syscall(5, relpath, flags);
 		free(globQuery);
 		globfree(&globlist);
+		free(curPath);
 		return fd;
 	}
 	if (globlist.gl_pathv[0])
@@ -127,6 +128,7 @@ int handle_open(const char *relpath, int flags)
 	}
 	free(globQuery);
 	globfree(&globlist);
+	free(curPath);
 	return fd;
 }
 
